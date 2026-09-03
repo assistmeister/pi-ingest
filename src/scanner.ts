@@ -517,10 +517,13 @@ export function isBriefingPath(abs: string): boolean {
   return base === "latest.md" || (base.startsWith("briefing-") && base.endsWith(".md"));
 }
 
+/** Section header marking model-written triage notes. */
+export const ANALYST_HEADER = "## Analyst notes (cheap model)";
+
 /** Append an `## Analyst notes` section (repeat calls add timestamped blocks). */
 export function appendAnalystNotes(existing: string, notes: string, stamp: string): string {
   const block =
-    `## Analyst notes (cheap model)\n\n_Added ${stamp}. Ranked by load-bearing value — read top-down._\n\n${notes.trim()}\n`;
+    `${ANALYST_HEADER}\n\n_Added ${stamp}. Ranked by load-bearing value — read top-down._\n\n${notes.trim()}\n`;
   if (!existing.endsWith("\n")) existing += "\n";
   return `${existing}\n${block}`;
 }

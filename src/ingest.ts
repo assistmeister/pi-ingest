@@ -15,6 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import {
+  ANALYST_HEADER,
   appendAnalystNotes,
   isBriefingPath,
   isDangerousRoot,
@@ -165,11 +166,14 @@ export default function piIngest(pi: ExtensionAPI) {
         pi.sendUserMessage(prompt);
         return;
       }
+      // Analyst pass: the current (cheap, user-selected) model triages the
+      // deterministic snapshot — reads the highest-value files, judges what
+      // matters vs noise, and persists notes via append_analyst_notes.
+      // The snapshot stays untouched as the coverage guarantee. After the
+      // turn finishes, the planner offer below picks up the annotated file.
+      let handoffText = briefing.slice(0, 15000);
+      let notesPresent = false;
       if (a.analyze) {
-        // Analyst pass: the current (cheap, user-selected) model triages the
-        // deterministic snapshot — reads the highest-value files, judges what
-        // matters vs noise, and persists notes via append_analyst_notes.
-        // The snapshot stays untouched as the coverage guarantee.
         const prompt =
           `You are triaging this workspace for a planner model that must NOT re-walk the tree. ` +
           `Briefing file: ${file}\n\n` +
@@ -181,17 +185,43 @@ export default function piIngest(pi: ExtensionAPI) {
           `Snapshot (same content as the briefing file):\n\n${briefing.slice(0, 12000)}`;
         announcePrompt(dropPrompt("analyst-prompt", prompt));
         pi.sendUserMessage(prompt);
-        return;
+        try {
+          await ctx.waitForIdle();
+        } catch {
+          return; // aborted by user mid-triage
+        }
+        try {
+          const fromDisk = readFileSync(file, "utf8");
+          if (fromDisk.includes(ANALYST_HEADER)) {
+            notesPresent = true;
+            handoffText = fromDisk.slice(0, 15000);
+          }
+        } catch {
+          // briefing unreadable: fall through with the snapshot
+        }
       }
 
-      if (a.noNewSession) return;
+      if (a.noNewSession) {
+        if (!ctx.hasUI) {
+          console.error(
+            `pi-ingest: briefing ready → ${file}${notesPresent ? " (analyst notes appended)" : ""}`,
+          );
+        }
+        return;
+      }
 
       // Offer the planner handoff: fresh session with the briefing injected.
       let open = true;
       if (ctx.hasUI) {
         open = await ctx.ui.confirm(
-          "Briefing ready",
-          `Briefing saved to ${file} (scanned under ${model}). Open a fresh session with it pre-loaded for your planner model?`,
+          notesPresent ? "Briefing complete" : "Briefing ready",
+          notesPresent
+            ? `Analyst notes appended to ${file}. Open a fresh session with it pre-loaded for your planner model?`
+            : `Briefing saved to ${file} (scanned under ${model}). Open a fresh session with it pre-loaded for your planner model?`,
+        );
+      } else {
+        console.error(
+          `pi-ingest: briefing ready → ${file}${notesPresent ? " (analyst notes appended)" : ""}`,
         );
       }
       if (!open) return;
@@ -206,7 +236,7 @@ export default function piIngest(pi: ExtensionAPI) {
               {
                 type: "text",
                 text:
-                  `Workspace briefing for the planner (produced cheaply by pi-ingest — do NOT re-walk the tree; read files only as needed):\n\n${briefing.slice(0, 15000)}\n\n` +
+                  `Workspace briefing for the planner (produced cheaply by pi-ingest — do NOT re-walk the tree; read files only as needed):\n\n${handoffText}\n\n` +
                   `My goal is: <describe your goal here>. Propose a plan first.`,
               },
             ],

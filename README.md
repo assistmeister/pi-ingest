@@ -90,7 +90,9 @@ pass on top: it reads (at most 12 files) what it judges load-bearing and
 appends ranked must-reads, key abstractions, gotchas, and safe-to-ignore
 notes via the least-privilege `append_analyst_notes` tool (can only touch
 `…/ingest/briefing-*.md` and `latest.md`; `latest.md` mirrors new notes).
-The model never edits the snapshot itself.
+The model never edits the snapshot itself. When the triage turn finishes,
+`/ingest` picks up the annotated file and offers the planner session —
+which is why `--analyze` is not asked up front.
 
 ## Costs
 
