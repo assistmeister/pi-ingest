@@ -7,18 +7,19 @@ so your expensive reasoning model never pays for the tree walk.
 ## Recommended flow (manual cheap-model handoff)
 
 ```bash
-# 1. Start cheap
-/model @smol
+# 1. Start cheap: /model, pick something small (e.g. gpt-5-mini) —
+#    or launch straight into it: pi --model gpt-5-mini
 
 # 2. Ingest the workspace (warns on home directory, git-aware capped scan)
 /ingest
 
 # 3. A fresh session opens with the briefing injected.
-#    Switch to your planner there: /model @plan
+#    Switch to your planner there: /model
 ```
 
-The scan itself costs zero completion tokens. Being on `@smol` keeps any
-follow-up Q&A cheap until you hand off.
+The scan itself costs zero completion tokens. Being on a cheap model keeps any
+follow-up Q&A cheap until you hand off. (Tip: `pi --models "mini,4.6"` scopes
+Ctrl+P cycling to just those fuzzy matches.)
 
 ## Requirements
 
@@ -115,4 +116,5 @@ headless/print mode there's no dialog, so those roots are refused unless
   accept. Only the API subset present in both runtimes is used
   (`newSession({ setup })`, `ui.confirm/notify/setStatus`).
 - On Oh My Pi the extension loads unchanged; the briefing dir switches to
-  `.omp/ingest/` (detected via OMP-only `pi.zod`).
+  `.omp/ingest/` (detected via OMP-only `pi.zod`). OMP users can also use
+  model roles for the handoff (`/model @smol` to ingest, `/model @plan` to plan).

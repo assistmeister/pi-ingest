@@ -4,7 +4,7 @@
 // setStatus, newSession({ setup }), TypeBox tool schemas.
 //
 // Workflow (manual cheap-model flow):
-//   1. User switches to a cheap model: /model @smol
+//   1. User switches to a cheap model: /model (pick) or pi --model <pattern>
 //   2. User runs: /ingest [--force] [--no-new-session] [--max-files N] [path]
 //   3. Extension scans deterministically (zero completion tokens), writes a
 //      planner-ready briefing under <root>/.pi/ingest/ (.omp on Oh My Pi),
