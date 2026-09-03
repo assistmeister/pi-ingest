@@ -1,6 +1,6 @@
 {
   "name": "pi-ingest",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Cheap context ingestion for Pi: deterministic workspace scan plus planner-ready briefing. Run under a cheap model, then hand the briefing to your planner.",
   "type": "module",
   "license": "MIT",
