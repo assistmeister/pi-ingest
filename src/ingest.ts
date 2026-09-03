@@ -24,7 +24,7 @@ import {
   scanWorkspace,
 } from "./scanner";
 
-interface IngestArgs {
+export interface IngestArgs {
   path: string | null;
   goal: string | null;
   force: boolean;
@@ -36,7 +36,7 @@ interface IngestArgs {
   includeHidden: boolean;
 }
 
-function parseArgs(raw: string): IngestArgs {
+export function parseArgs(raw: string): IngestArgs {
   const out: IngestArgs = {
     path: null,
     goal: null,
@@ -54,7 +54,7 @@ function parseArgs(raw: string): IngestArgs {
     if (t === "--force" || t === "-f") out.force = true;
     else if (t === "--no-new-session") out.noNewSession = true;
     else if (t === "--summarize") out.summarize = true;
-    else if (t === "--analyze") out.analyze = true;
+    else if (t === "--analyze" || t === "--analyse") out.analyze = true;
     else if (t === "--goal" && i + 1 < tokens.length) out.goal = tokens[++i].replace(/^["']|["']$/g, "");
     else if (t.startsWith("--goal=")) out.goal = t.slice("--goal=".length).replace(/^["']|["']$/g, "");
     else if (t === "--max-depth" && i + 1 < tokens.length) out.maxDepth = Math.max(1, Math.min(8, Number(tokens[++i]) || 4));
@@ -68,6 +68,18 @@ function parseArgs(raw: string): IngestArgs {
     }
   }
   return out;
+}
+
+/** Human label for the active model. Shape varies by host — never trust `${model}`. */
+function modelLabel(m: unknown): string {
+  if (typeof m === "string" && m) return m;
+  if (m && typeof m === "object") {
+    const r = m as Record<string, unknown>;
+    for (const k of ["name", "id", "label", "modelId"]) {
+      if (typeof r[k] === "string" && r[k] !== "") return r[k] as string;
+    }
+  }
+  return "current model";
 }
 
 function briefingStamp(d = new Date()): string {
@@ -138,8 +150,7 @@ export default function piIngest(pi: ExtensionAPI) {
       const file = join(dir, `briefing-${stamp}.md`);
       writeFileSync(file, briefing, "utf8");
       writeFileSync(join(dir, "latest.md"), briefing, "utf8");
-
-      const model = ctx.model ? `${ctx.model}` : "current model";
+      const model = modelLabel(ctx.model);
       ctx.ui.notify(
         `pi-ingest: briefing written (${snapshot.fileCount} files, ${snapshot.dirCount} dirs` +
           `${snapshot.truncated ? ", truncated" : ""}) → ${file}`,
