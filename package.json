@@ -1,8 +1,21 @@
 {
   "name": "pi-ingest",
   "version": "0.1.0",
-  "description": "Cheap context ingestion for oh-my-pi: deterministic workspace scan + planner-ready briefing. Run under a cheap model (/model @smol), then hand the briefing to your planner.",
+  "description": "Cheap context ingestion for Pi: deterministic workspace scan plus planner-ready briefing. Run under a cheap model, then hand the briefing to your planner.",
   "type": "module",
+  "license": "MIT",
+  "author": "assistmeister",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/assistmeister/pi-ingest.git"
+  },
+  "keywords": [
+    "pi",
+    "pi-package",
+    "ingest",
+    "context",
+    "planner"
+  ],
   "pi": {
     "extensions": ["./src/ingest.ts"]
   },

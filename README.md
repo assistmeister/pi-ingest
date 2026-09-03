@@ -20,38 +20,43 @@ so your expensive reasoning model never pays for the tree walk.
 The scan itself costs zero completion tokens. Being on `@smol` keeps any
 follow-up Q&A cheap until you hand off.
 
+## Requirements
+
+- A Pi installation ([pi.dev](https://pi.dev))
+- That's it — no API key needed for the scan itself (it never calls a model)
+
 ## Install
 
-**A — user-wide (recommended):**
+```bash
+pi install git:github.com/assistmeister/pi-ingest
+```
+
+Project-local instead (`<repo>/.pi/settings.json`):
+
+```bash
+pi install -l git:github.com/assistmeister/pi-ingest
+```
+
+Or manual:
 
 ```bash
 mkdir -p ~/.pi/agent/extensions
-cp -r /path/to/pi-ingest ~/.pi/agent/extensions/pi-ingest
+cp -r pi-ingest ~/.pi/agent/extensions/pi-ingest
 # restart pi
 ```
 
-Project-local alternative: copy to `<repo>/.pi/extensions/`.
-
-**B — via settings:**
-
-```yaml
-# ~/.pi/agent/config.yml (if supported by your Pi version)
-extensions:
-  - /path/to/pi-ingest
-```
-
-(`package.json` declares both `pi.extensions` and `omp.extensions`, so
-pointing at the directory is enough on either host.)
-
-**C — try once:**
+**Try without installing:**
 
 ```bash
-pi --extension /path/to/pi-ingest
+pi --extension ./pi-ingest
 ```
 
-**Oh My Pi:** same steps with `~/.omp/agent/extensions`,
-`<repo>/.omp/extensions`, or `omp --extension …`. Briefings land in
-`.omp/ingest/` there instead of `.pi/ingest/`.
+(`package.json` declares both `pi.extensions` and `omp.extensions`, so every
+install method picks up `./src/ingest.ts` directly — no build step.)
+
+**Oh My Pi:** `omp --extension …`, `~/.omp/agent/extensions`, or
+`<repo>/.omp/extensions`. Briefings land in `.omp/ingest/` there instead of
+`.pi/ingest/`.
 
 ## Usage
 
