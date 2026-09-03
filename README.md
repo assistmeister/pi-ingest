@@ -62,12 +62,13 @@ install method picks up `./src/ingest.ts` directly — no build step.)
 ## Usage
 
 ```
-/ingest [--force] [--no-new-session] [--summarize] [--analyze] [--max-depth N] [--max-files N] [--include-hidden] [path]
+/ingest [--force] [--no-new-session] [--summarize] [--analyze] [--goal "..."] [--max-depth N] [--max-files N] [--include-hidden] [path]
 ```
 
 | Flag | Effect |
 |---|---|
 | `path` | Directory to scan (default: session cwd) |
+| `--goal "..."` | Goal carried into the planner session (else you fill it in there) |
 | `--force` | Allow home-directory / filesystem-root scans |
 | `--no-new-session` | Write briefing only, don't offer a new session |
 | `--summarize` | Cheap model compresses the snapshot into a 15-line summary (chat reply) |
@@ -75,6 +76,15 @@ install method picks up `./src/ingest.ts` directly — no build step.)
 | `--max-depth N` | Tree depth cap, 1–8 (default 4) |
 | `--max-files N` | File cap, 50–5000 (default 500) |
 | `--include-hidden` | Include dotfiles |
+
+## After the new session opens
+
+1. It starts with the briefing (+ analyst notes, if any) and your goal
+   already injected, ending in *"Propose a plan first"*.
+2. Switch to the planner model (`/model`), read the plan, approve or
+   redirect it.
+3. Implementation happens in that session with full history — the cheap
+   ingest session stays behind as a clean record.
 
 `.pi/ingest/briefing-<stamp>.md` (plus `latest.md`) — `.omp/ingest/` on Oh My Pi.
 `--summarize`/`--analyze` also drop their model prompt to a file

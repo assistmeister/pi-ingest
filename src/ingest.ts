@@ -26,6 +26,7 @@ import {
 
 interface IngestArgs {
   path: string | null;
+  goal: string | null;
   force: boolean;
   noNewSession: boolean;
   analyze: boolean;
@@ -38,6 +39,7 @@ interface IngestArgs {
 function parseArgs(raw: string): IngestArgs {
   const out: IngestArgs = {
     path: null,
+    goal: null,
     force: false,
     noNewSession: false,
     analyze: false,
@@ -53,6 +55,8 @@ function parseArgs(raw: string): IngestArgs {
     else if (t === "--no-new-session") out.noNewSession = true;
     else if (t === "--summarize") out.summarize = true;
     else if (t === "--analyze") out.analyze = true;
+    else if (t === "--goal" && i + 1 < tokens.length) out.goal = tokens[++i].replace(/^["']|["']$/g, "");
+    else if (t.startsWith("--goal=")) out.goal = t.slice("--goal=".length).replace(/^["']|["']$/g, "");
     else if (t === "--max-depth" && i + 1 < tokens.length) out.maxDepth = Math.max(1, Math.min(8, Number(tokens[++i]) || 4));
     else if (t === "--max-files" && i + 1 < tokens.length) out.maxFiles = Math.max(50, Math.min(5000, Number(tokens[++i]) || 500));
     else if (t.startsWith("--max-depth=")) out.maxDepth = Math.max(1, Math.min(8, Number(t.split("=")[1]) || 4));
@@ -201,7 +205,8 @@ export default function piIngest(pi: ExtensionAPI) {
         }
       }
 
-      if (a.noNewSession) {
+      if (a.noNewSession || !ctx.hasUI) {
+        // A headless run has no UI session to switch: report the artifact.
         if (!ctx.hasUI) {
           console.error(
             `pi-ingest: briefing ready → ${file}${notesPresent ? " (analyst notes appended)" : ""}`,
@@ -211,19 +216,12 @@ export default function piIngest(pi: ExtensionAPI) {
       }
 
       // Offer the planner handoff: fresh session with the briefing injected.
-      let open = true;
-      if (ctx.hasUI) {
-        open = await ctx.ui.confirm(
-          notesPresent ? "Briefing complete" : "Briefing ready",
-          notesPresent
-            ? `Analyst notes appended to ${file}. Open a fresh session with it pre-loaded for your planner model?`
-            : `Briefing saved to ${file} (scanned under ${model}). Open a fresh session with it pre-loaded for your planner model?`,
-        );
-      } else {
-        console.error(
-          `pi-ingest: briefing ready → ${file}${notesPresent ? " (analyst notes appended)" : ""}`,
-        );
-      }
+      const open = await ctx.ui.confirm(
+        notesPresent ? "Briefing complete" : "Briefing ready",
+        notesPresent
+          ? `Analyst notes appended to ${file}. Open a fresh session with it pre-loaded for your planner model?`
+          : `Briefing saved to ${file} (scanned under ${model}). Open a fresh session with it pre-loaded for your planner model?`,
+      );
       if (!open) return;
 
       await ctx.newSession({
@@ -237,7 +235,9 @@ export default function piIngest(pi: ExtensionAPI) {
                 type: "text",
                 text:
                   `Workspace briefing for the planner (produced cheaply by pi-ingest — do NOT re-walk the tree; read files only as needed):\n\n${handoffText}\n\n` +
-                  `My goal is: <describe your goal here>. Propose a plan first.`,
+                  (a.goal
+                    ? `My goal is: ${a.goal}. Propose a plan first, then wait for approval before implementing.`
+                    : `My goal is: <describe your goal here>. Propose a plan first.`),
               },
             ],
           });
