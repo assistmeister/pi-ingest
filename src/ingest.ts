@@ -10,11 +10,13 @@
 //      planner-ready briefing under <root>/.pi/ingest/ (.omp on Oh My Pi),
 //      and offers to open a fresh session with the briefing pre-injected.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import {
+  appendAnalystNotes,
+  isBriefingPath,
   isDangerousRoot,
   isHomeDir,
   renderBriefing,
@@ -25,6 +27,7 @@ interface IngestArgs {
   path: string | null;
   force: boolean;
   noNewSession: boolean;
+  analyze: boolean;
   summarize: boolean;
   maxDepth: number;
   maxFiles: number;
@@ -36,6 +39,7 @@ function parseArgs(raw: string): IngestArgs {
     path: null,
     force: false,
     noNewSession: false,
+    analyze: false,
     summarize: false,
     maxDepth: 4,
     maxFiles: 500,
@@ -47,7 +51,7 @@ function parseArgs(raw: string): IngestArgs {
     if (t === "--force" || t === "-f") out.force = true;
     else if (t === "--no-new-session") out.noNewSession = true;
     else if (t === "--summarize") out.summarize = true;
-    else if (t === "--include-hidden") out.includeHidden = true;
+    else if (t === "--analyze") out.analyze = true;
     else if (t === "--max-depth" && i + 1 < tokens.length) out.maxDepth = Math.max(1, Math.min(8, Number(tokens[++i]) || 4));
     else if (t === "--max-files" && i + 1 < tokens.length) out.maxFiles = Math.max(50, Math.min(5000, Number(tokens[++i]) || 500));
     else if (t.startsWith("--max-depth=")) out.maxDepth = Math.max(1, Math.min(8, Number(t.split("=")[1]) || 4));
@@ -137,14 +141,46 @@ export default function piIngest(pi: ExtensionAPI) {
         "info",
       );
 
+      // Model-driven passes below work in two ways: interactively the prompt
+      // is sent as a message (turn starts automatically); headless (`-p`) the
+      // command consumes the turn, so the same prompt is also dropped to a
+      // file for a follow-up invocation.
+      const dropPrompt = (name: string, prompt: string): string => {
+        const p = join(dir, `${name}-${stamp}.md`);
+        writeFileSync(p, prompt, "utf8");
+        return p;
+      };
+      const announcePrompt = (p: string): void => {
+        if (ctx.hasUI) ctx.ui.notify(`pi-ingest: model prompt saved → ${p}`, "info");
+        else console.error(`pi-ingest: model prompt saved → ${p}`);
+      };
+
       if (a.summarize) {
         // Hand the deterministic snapshot to the current (cheap, user-selected)
-        // model for a one-turn compression pass. The model writes nothing; the
-        // user pastes or the next /ingest run picks it up.
-        pi.sendUserMessage(
+        // model for a one-turn compression pass.
+        const prompt =
           `Compress the workspace snapshot below into a 15-line executive summary ` +
-            `(purpose, stack, entry points, gotchas). Snapshot:\n\n${briefing.slice(0, 12000)}`,
-        );
+          `(purpose, stack, entry points, gotchas). Snapshot:\n\n${briefing.slice(0, 12000)}`;
+        announcePrompt(dropPrompt("summary-prompt", prompt));
+        pi.sendUserMessage(prompt);
+        return;
+      }
+      if (a.analyze) {
+        // Analyst pass: the current (cheap, user-selected) model triages the
+        // deterministic snapshot — reads the highest-value files, judges what
+        // matters vs noise, and persists notes via append_analyst_notes.
+        // The snapshot stays untouched as the coverage guarantee.
+        const prompt =
+          `You are triaging this workspace for a planner model that must NOT re-walk the tree. ` +
+          `Briefing file: ${file}\n\n` +
+          `1. Read the briefing file.\n` +
+          `2. Read at most 12 files you judge most load-bearing (entry points, core abstractions, docs that explain why — skip tests, generated code, vendored deps).\n` +
+          `3. Decide what is valuable vs noise: ranked must-reads, key abstractions in one line each, gotchas, and what the planner can safely ignore.\n` +
+          `4. Persist exactly once via append_analyst_notes({ briefing: ${JSON.stringify(file)}, notes: "<markdown>" }). ` +
+          `Do not edit anything else.\n\n` +
+          `Snapshot (same content as the briefing file):\n\n${briefing.slice(0, 12000)}`;
+        announcePrompt(dropPrompt("analyst-prompt", prompt));
+        pi.sendUserMessage(prompt);
         return;
       }
 
@@ -220,6 +256,46 @@ export default function piIngest(pi: ExtensionAPI) {
           dirCount: snapshot.dirCount,
           truncated: snapshot.truncated,
         },
+      };
+    },
+  });
+  pi.registerTool({
+    name: "append_analyst_notes",
+    label: "Append Analyst Notes",
+    description:
+      "Append a timestamped 'Analyst notes' section to a pi-ingest briefing file. " +
+      "Use after triaging a workspace: ranked must-reads, key abstractions, gotchas, safe-to-ignore. " +
+      "Only briefing files (…/ingest/briefing-*.md, latest.md) are accepted; everything else is refused.",
+    parameters: Type.Object({
+      briefing: Type.String({ description: "Absolute path to the briefing file from /ingest." }),
+      notes: Type.String({ description: "Markdown analyst notes to append." }),
+    }),
+    async execute(_id, params, _signal, _onUpdate, _ctx) {
+      if (!isBriefingPath(params.briefing)) {
+        return {
+          content: [{ type: "text", text: `Refused: not a pi-ingest briefing file: ${params.briefing}` }],
+          details: { briefing: params.briefing, refused: true },
+        };
+      }
+      let existing: string;
+      try {
+        existing = readFileSync(params.briefing, "utf8");
+      } catch {
+        return {
+          content: [{ type: "text", text: `Failed to read briefing file: ${params.briefing}` }],
+          details: { briefing: params.briefing, refused: true },
+        };
+      }
+      const stamp = briefingStamp();
+      const updated = appendAnalystNotes(existing, params.notes, stamp);
+      writeFileSync(params.briefing, updated, "utf8");
+      // Keep latest.md in sync when a stamped briefing gains notes.
+      if (basename(params.briefing).startsWith("briefing-")) {
+        writeFileSync(join(dirname(params.briefing), "latest.md"), updated, "utf8");
+      }
+      return {
+        content: [{ type: "text", text: `Analyst notes appended to ${params.briefing}` }],
+        details: { briefing: params.briefing, stamp },
       };
     },
   });

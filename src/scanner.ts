@@ -508,3 +508,19 @@ export function renderBriefing(s: WorkspaceSnapshot, homeWarned: boolean): strin
   lines.push(``);
   return lines.join("\n");
 }
+
+/** True when `abs` looks like a pi-ingest briefing (…/ingest/briefing-*.md or latest.md). */
+export function isBriefingPath(abs: string): boolean {
+  const parts = abs.split("/");
+  if (parts.length < 2 || parts[parts.length - 2] !== "ingest") return false;
+  const base = parts[parts.length - 1];
+  return base === "latest.md" || (base.startsWith("briefing-") && base.endsWith(".md"));
+}
+
+/** Append an `## Analyst notes` section (repeat calls add timestamped blocks). */
+export function appendAnalystNotes(existing: string, notes: string, stamp: string): string {
+  const block =
+    `## Analyst notes (cheap model)\n\n_Added ${stamp}. Ranked by load-bearing value — read top-down._\n\n${notes.trim()}\n`;
+  if (!existing.endsWith("\n")) existing += "\n";
+  return `${existing}\n${block}`;
+}

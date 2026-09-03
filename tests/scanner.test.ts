@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  appendAnalystNotes,
+  isBriefingPath,
   isDangerousRoot,
   isHomeDir,
   renderBriefing,
@@ -62,5 +64,23 @@ describe("renderBriefing", () => {
     for (const h of ["# Workspace briefing", "## What it does", "## Where things are"]) {
       expect(b).toContain(h);
     }
+  });
+});
+
+describe("analyst notes", () => {
+  test("briefing path allowlist", () => {
+    expect(isBriefingPath("/r/.pi/ingest/briefing-20240101-000000.md")).toBe(true);
+    expect(isBriefingPath("/r/.omp/ingest/latest.md")).toBe(true);
+    expect(isBriefingPath("/r/.pi/ingest/notes.md")).toBe(false);
+    expect(isBriefingPath("/r/src/index.ts")).toBe(false);
+    expect(isBriefingPath("/r/README.md")).toBe(false);
+  });
+
+  test("append adds timestamped section", () => {
+    const out = appendAnalystNotes("# B\n", "1. Read `src/x`.\n", "s1");
+    expect(out).toContain("## Analyst notes (cheap model)");
+    expect(out).toContain("s1");
+    expect(out).toContain("src/x");
+    expect(out.startsWith("# B\n")).toBe(true);
   });
 });

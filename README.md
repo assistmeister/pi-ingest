@@ -62,7 +62,7 @@ install method picks up `./src/ingest.ts` directly — no build step.)
 ## Usage
 
 ```
-/ingest [--force] [--no-new-session] [--summarize] [--max-depth N] [--max-files N] [--include-hidden] [path]
+/ingest [--force] [--no-new-session] [--summarize] [--analyze] [--max-depth N] [--max-files N] [--include-hidden] [path]
 ```
 
 | Flag | Effect |
@@ -70,36 +70,36 @@ install method picks up `./src/ingest.ts` directly — no build step.)
 | `path` | Directory to scan (default: session cwd) |
 | `--force` | Allow home-directory / filesystem-root scans |
 | `--no-new-session` | Write briefing only, don't offer a new session |
-| `--summarize` | Ask the current (cheap) model for a 15-line compression of the snapshot |
+| `--summarize` | Cheap model compresses the snapshot into a 15-line summary (chat reply) |
+| `--analyze` | Cheap model triages the snapshot — reads the most load-bearing files, judges value vs noise, persists `Analyst notes` into the briefing |
 | `--max-depth N` | Tree depth cap, 1–8 (default 4) |
 | `--max-files N` | File cap, 50–5000 (default 500) |
 | `--include-hidden` | Include dotfiles |
 
-`.pi/ingest/briefing-<stamp>.md` (plus `latest.md`) — `.omp/ingest/` on Oh My Pi:
+`.pi/ingest/briefing-<stamp>.md` (plus `latest.md`) — `.omp/ingest/` on Oh My Pi.
+`--summarize`/`--analyze` also drop their model prompt to a file
+(`summary-prompt-<stamp>.md` / `analyst-prompt-<stamp>.md`) so headless
+(`-p`) runs can feed it to a follow-up invocation — the command itself
+consumes the turn there.
 
-## Home-directory guard
+## Reasoning mix: deterministic base, model judgment on top
 
-Scanning `$HOME` or `/` triggers a confirmation dialog explaining the risk
-(secrets, media trees, dotfiles) and suggesting a repo subdirectory. In
-headless/print mode there's no dialog, so those roots are refused unless
-`--force` is passed. The acknowledgement is recorded in the briefing.
-
-## What the briefing contains
-
-- **What it does** — README head (40 lines) + project signals
-  (`package.json` name/version/scripts, `pyproject.toml`, `Cargo.toml`,
-  `go.mod`, Dockerfile, CI presence)
-- **Where things are** — capped tree + likely entry points + file mix
-- **Working state** — git branch, `status --short`, last 5 commits
+The scan is deterministic and stays the coverage guarantee — the planner can
+always fall back to the full tree. `--analyze` adds a cheap-model analyst
+pass on top: it reads (at most 12 files) what it judges load-bearing and
+appends ranked must-reads, key abstractions, gotchas, and safe-to-ignore
+notes via the least-privilege `append_analyst_notes` tool (can only touch
+`…/ingest/briefing-*.md` and `latest.md`; `latest.md` mirrors new notes).
+The model never edits the snapshot itself.
 
 ## Costs
 
 | Step | Tokens |
 |---|---|
 | Tree walk + manifest peeks | 0 (local fs) |
+| `--analyze` triage (cheap model) | snapshot in + ≤12 file reads + notes out — ~10–50× cheaper than the planner doing it |
 | Briefing injected into new session | input tokens once |
 | Planner reads | only files it actually needs |
-
 ## Limits
 
 - `.gitignore` honoured with a small basename-glob matcher (negations `!` ignored — treated as not-ignored).
