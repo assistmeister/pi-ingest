@@ -1,0 +1,19 @@
+{
+  "name": "pi-ingest",
+  "version": "0.1.0",
+  "description": "Cheap context ingestion for oh-my-pi: deterministic workspace scan + planner-ready briefing. Run under a cheap model (/model @smol), then hand the briefing to your planner.",
+  "type": "module",
+  "license": "MIT",
+  "omp": {
+    "extensions": ["./src/ingest.ts"]
+  },
+  "scripts": {
+    "typecheck": "bunx --bun tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.1.6",
+    "bun-types": "^1.4.0",
+    "typescript": "^5.9.2"
+  }
+}
