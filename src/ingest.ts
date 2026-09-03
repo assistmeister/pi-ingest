@@ -1,15 +1,19 @@
-// pi-ingest extension entry.
+// pi-ingest extension entry. Targets upstream Pi (@mariozechner/pi-coding-agent);
+// loads on Oh My Pi too via its legacy-specifier compat rewrite. Only the
+// shared API subset is used: registerCommand/registerTool, ui.confirm/notify/
+// setStatus, newSession({ setup }), TypeBox tool schemas.
 //
 // Workflow (manual cheap-model flow):
 //   1. User switches to a cheap model: /model @smol
 //   2. User runs: /ingest [--force] [--no-new-session] [--max-files N] [path]
 //   3. Extension scans deterministically (zero completion tokens), writes a
-//      planner-ready briefing under <root>/.omp/ingest/, and offers to open a
-//      fresh session with the briefing pre-injected for the planner model.
+//      planner-ready briefing under <root>/.pi/ingest/ (.omp on Oh My Pi),
+//      and offers to open a fresh session with the briefing pre-injected.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "typebox";
 import {
   isDangerousRoot,
   isHomeDir,
@@ -66,6 +70,9 @@ function briefingStamp(d = new Date()): string {
 }
 
 export default function piIngest(pi: ExtensionAPI) {
+  // Briefing dir follows the host: upstream Pi uses `.pi`, Oh My Pi `.omp`.
+  // `zod` only exists on the OMP ExtensionAPI, so its presence identifies OMP.
+  const stateDir = "zod" in (pi as unknown as Record<string, unknown>) ? ".omp" : ".pi";
   pi.registerCommand("ingest", {
     description:
       "Cheap context ingestion: scan workspace, write planner-ready briefing, offer a fresh session. Run under a cheap model first.",
@@ -115,7 +122,7 @@ export default function piIngest(pi: ExtensionAPI) {
       }
 
       const briefing = renderBriefing(snapshot, dangerous);
-      const dir = join(root, ".omp", "ingest");
+      const dir = join(root, stateDir, "ingest");
       mkdirSync(dir, { recursive: true });
       const stamp = briefingStamp();
       const file = join(dir, `briefing-${stamp}.md`);
@@ -172,29 +179,21 @@ export default function piIngest(pi: ExtensionAPI) {
     },
   });
 
-  const z = pi.zod;
   pi.registerTool({
     name: "ingest_workspace",
     label: "Ingest Workspace",
     description:
       "Deterministically scan a workspace directory (git-aware, capped) and return a planner-ready briefing. Prefer this over re-walking the tree with reads. Refuses home/root without force=true.",
-    parameters: z.object({
-      path: z.string().optional().describe("Directory to scan, relative to cwd. Defaults to cwd."),
-      maxDepth: z.number().optional().describe("Tree depth cap 1-8 (default 4)."),
-      maxFiles: z.number().optional().describe("File cap 50-5000 (default 500)."),
-      includeHidden: z.boolean().optional().describe("Include dotfiles (default false)."),
-      force: z.boolean().optional().describe("Allow home-directory or filesystem-root scans."),
+    parameters: Type.Object({
+      path: Type.Optional(Type.String({ description: "Directory to scan, relative to cwd. Defaults to cwd." })),
+      maxDepth: Type.Optional(Type.Number({ description: "Tree depth cap 1-8 (default 4)." })),
+      maxFiles: Type.Optional(Type.Number({ description: "File cap 50-5000 (default 500)." })),
+      includeHidden: Type.Optional(Type.Boolean({ description: "Include dotfiles (default false)." })),
+      force: Type.Optional(Type.Boolean({ description: "Allow home-directory or filesystem-root scans." })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      const p = params as {
-        path?: string;
-        maxDepth?: number;
-        maxFiles?: number;
-        includeHidden?: boolean;
-        force?: boolean;
-      };
-      const root = resolve(ctx.cwd, p.path ?? ".");
-      if (isDangerousRoot(root) && !p.force) {
+      const root = resolve(ctx.cwd, params.path ?? ".");
+      if (isDangerousRoot(root) && !params.force) {
         return {
           content: [
             {
@@ -202,15 +201,14 @@ export default function piIngest(pi: ExtensionAPI) {
               text: `Refused: ${root} is a home-directory or filesystem-root scan. Re-run with force=true or pick a repo subdirectory.`,
             },
           ],
-          isError: true,
           details: { root, refused: true },
         };
       }
       const snapshot = scanWorkspace({
         root,
-        maxDepth: Math.max(1, Math.min(8, p.maxDepth ?? 4)),
-        maxFiles: Math.max(50, Math.min(5000, p.maxFiles ?? 500)),
-        includeHidden: p.includeHidden ?? false,
+        maxDepth: Math.max(1, Math.min(8, params.maxDepth ?? 4)),
+        maxFiles: Math.max(50, Math.min(5000, params.maxFiles ?? 500)),
+        includeHidden: params.includeHidden ?? false,
       });
       const briefing = renderBriefing(snapshot, isDangerousRoot(root));
       return {

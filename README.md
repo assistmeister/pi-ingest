@@ -1,4 +1,4 @@
-# pi-ingest — cheap context ingestion for oh-my-pi
+# pi-ingest — cheap context ingestion for Pi
 
 One purpose: scan the current workspace **deterministically** (no LLM tokens),
 write a planner-ready briefing, and open a fresh session with it pre-loaded —
@@ -25,27 +25,33 @@ follow-up Q&A cheap until you hand off.
 **A — user-wide (recommended):**
 
 ```bash
-mkdir -p ~/.omp/agent/extensions
-cp -r /path/to/pi-ingest ~/.omp/agent/extensions/pi-ingest
-# restart omp
+mkdir -p ~/.pi/agent/extensions
+cp -r /path/to/pi-ingest ~/.pi/agent/extensions/pi-ingest
+# restart pi
 ```
+
+Project-local alternative: copy to `<repo>/.pi/extensions/`.
 
 **B — via settings:**
 
 ```yaml
-# ~/.omp/agent/config.yml
+# ~/.pi/agent/config.yml (if supported by your Pi version)
 extensions:
   - /path/to/pi-ingest
 ```
 
-(`package.json` declares `omp.extensions: ["./src/ingest.ts"]`, so pointing at
-the directory is enough.)
+(`package.json` declares both `pi.extensions` and `omp.extensions`, so
+pointing at the directory is enough on either host.)
 
 **C — try once:**
 
 ```bash
-omp --extension /path/to/pi-ingest
+pi --extension /path/to/pi-ingest
 ```
+
+**Oh My Pi:** same steps with `~/.omp/agent/extensions`,
+`<repo>/.omp/extensions`, or `omp --extension …`. Briefings land in
+`.omp/ingest/` there instead of `.pi/ingest/`.
 
 ## Usage
 
@@ -63,8 +69,7 @@ omp --extension /path/to/pi-ingest
 | `--max-files N` | File cap, 50–5000 (default 500) |
 | `--include-hidden` | Include dotfiles |
 
-`.omp/ingest/briefing-<stamp>.md` (plus `latest.md`):
-(same caps, same home guard — pass `force: true` to override).
+`.pi/ingest/briefing-<stamp>.md` (plus `latest.md`) — `.omp/ingest/` on Oh My Pi:
 
 ## Home-directory guard
 
@@ -74,8 +79,6 @@ headless/print mode there's no dialog, so those roots are refused unless
 `--force` is passed. The acknowledgement is recorded in the briefing.
 
 ## What the briefing contains
-
-`·omp/ingest/briefing-<stamp>.md` (plus `latest.md`):
 
 - **What it does** — README head (40 lines) + project signals
   (`package.json` name/version/scripts, `pyproject.toml`, `Cargo.toml`,
@@ -97,3 +100,14 @@ headless/print mode there's no dialog, so those roots are refused unless
 - Always skipped: `.git`, `node_modules`, `dist`, `build`, `target`, `__pycache__`, `.venv`, lockfiles, etc.
 - Binary files detected by NUL-byte heuristic and skipped for peeks.
 - Git info is best-effort (`git` binary, 5s timeout); absence never fails the scan.
+
+## Host compatibility
+
+- Primary target: upstream Pi (`@mariozechner/pi-coding-agent`, typechecked
+  against 0.73.1). The entry imports that scope type-only, so nothing
+  Pi-specific is bundled.
+- Tool schemas use plain `typebox` (a real dependency), which both hosts
+  accept. Only the API subset present in both runtimes is used
+  (`newSession({ setup })`, `ui.confirm/notify/setStatus`).
+- On Oh My Pi the extension loads unchanged; the briefing dir switches to
+  `.omp/ingest/` (detected via OMP-only `pi.zod`).

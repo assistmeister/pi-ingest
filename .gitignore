@@ -1,4 +1,5 @@
 node_modules/
+.pi/ingest/
 .omp/ingest/
 *.log
 .DS_Store
