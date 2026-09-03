@@ -90,10 +90,11 @@ export default function piIngest(pi: ExtensionAPI) {
       const home = isHomeDir(root);
       if (dangerous && !a.force) {
         if (!ctx.hasUI) {
-          ctx.ui.notify(
-            `pi-ingest: refusing to scan ${root} without --force (home/root guard, no UI to confirm).`,
-            "error",
-          );
+          // No TUI/turn here: notify is silent headless, so report on stderr
+          // (safe: no live TUI to corrupt when hasUI is false).
+          const text = `pi-ingest: refusing to scan ${root} without --force (home/root guard, no UI to confirm).`;
+          ctx.ui.notify(text, "error");
+          console.error(text);
           return;
         }
         const ok = await ctx.ui.confirm(
